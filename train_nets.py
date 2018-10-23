@@ -77,7 +77,7 @@ if __name__ == '__main__':
         # define placeholder
         inputs = tf.placeholder(name='img_inputs', shape=[None, *args.image_size, 3], dtype=tf.float32)
         labels = tf.placeholder(name='img_labels', shape=[None, ], dtype=tf.int64)
-        phase_train_placeholder = True  # tf.placeholder_with_default(tf.constant(False, dtype=tf.bool), shape=None, name='phase_train')
+        phase_train_placeholder = tf.placeholder_with_default(tf.constant(False, dtype=tf.bool), shape=None, name='phase_train')
 
         # prepare train dataset
         # the image is substracted 127.5 and multiplied 1/128.
@@ -165,6 +165,8 @@ if __name__ == '__main__':
         hd.close()
 
         # saver to load pretrained model or save model
+        # MobileFaceNets_var = [var for var in tf.trainable_variables() if var.name.startswith('MobileFaceNet')]
+        # saver_mobilefacenets = tf.train.Saver(MobileFaceNets_var, max_to_keep=args.saver_maxkeep)
         saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=args.saver_maxkeep)
 
         # init all variables
@@ -178,6 +180,7 @@ if __name__ == '__main__':
             print('Restoring pretrained model: %s' % pretrained_model)
             ckpt = tf.train.get_checkpoint_state(pretrained_model)
             print(ckpt)
+            # saver_mobilefacenets.restore(sess, ckpt.model_checkpoint_path)
             saver.restore(sess, ckpt.model_checkpoint_path)
             ckpt_prefix_name = ckpt.model_checkpoint_path.split('.ckpt')[0]
             split_array = ckpt_prefix_name.split('_')
@@ -204,7 +207,7 @@ if __name__ == '__main__':
 
                     count += 1
                     # print training information
-                    feed_dict = {inputs: images_train, labels: labels_train}
+                    feed_dict = {inputs: images_train, labels: labels_train, phase_train_placeholder: True}
                     if count % args.show_info_interval == 0:
                         start = time.time()
 
