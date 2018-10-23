@@ -77,7 +77,7 @@ if __name__ == '__main__':
         # define placeholder
         inputs = tf.placeholder(name='img_inputs', shape=[None, *args.image_size, 3], dtype=tf.float32)
         labels = tf.placeholder(name='img_labels', shape=[None, ], dtype=tf.int64)
-        phase_train_placeholder = tf.placeholder_with_default(tf.constant(False, dtype=tf.bool), shape=None, name='phase_train')
+        phase_train_placeholder = tf.placeholder_with_default(name='phase_train', shape=None, input=tf.constant(False, dtype=tf.bool))
 
         # prepare train dataset
         # the image is substracted 127.5 and multiplied 1/128.
