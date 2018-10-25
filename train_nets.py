@@ -30,7 +30,7 @@ def get_parser():
     parser.add_argument('--max_step', type=int, default=800000, help='the max train step')
     parser.add_argument('--num_output', default=85164, help='the train images number')
     parser.add_argument('--weight_decay', default=5e-5, help='L2 weight regularization.')
-    parser.add_argument('--step_schedule', help='Number of epochs for learning rate piecewise.', default=[80000, 100000, 120000, 140000])
+    parser.add_argument('--step_schedule', help='Number of step for learning rate piecewise.', default=[80000, 100000, 120000, 140000])
     parser.add_argument('--train_batch_size', type=int, default=90, help='batch size to train network')
     parser.add_argument('--tfrecords_file_path', default='./datasets/tfrecords', type=str, help='path to the output of tfrecords file path')
     parser.add_argument('--summary_path', default='./output/summary', help='the summary file save path')
