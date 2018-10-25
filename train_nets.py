@@ -115,8 +115,6 @@ if __name__ == '__main__':
             print('loss_type is invalid, you can use softmax or arcface.')
             exit(0)
 
-        tf.add_to_collection('losses', inference_loss)
-
         # total losses
         regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         total_loss = tf.add_n([inference_loss] + regularization_losses, name='total_loss')
@@ -184,7 +182,6 @@ if __name__ == '__main__':
             os.makedirs(args.log_file_path)
         
         print('\nstart training...')
-        total_accuracy = {}
 
         assign_global_step = tf.assign(global_step, pre_train_step, name='assignment_global_step')
         global_step_val = sess.run(assign_global_step)
