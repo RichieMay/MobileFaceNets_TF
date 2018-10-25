@@ -201,8 +201,8 @@ if __name__ == '__main__':
                     if global_step_val % args.show_info_interval == 0:
                         start = time.time()
 
-                        _, learning_rate_val, total_loss_val, inference_loss_val, reg_loss_val, acc_val = \
-                            sess.run([train_op, learning_rate, total_loss, inference_loss, regularization_losses, Accuracy_Op],
+                        _, learning_rate_val, total_loss_val, inference_loss_val, reg_loss_val, _, acc_val = \
+                            sess.run([train_op, learning_rate, total_loss, inference_loss, regularization_losses, inc_global_step_op, Accuracy_Op],
                                      feed_dict=feed_dict, options=config_pb2.RunOptions(report_tensor_allocations_upon_oom=True))
 
                         end = time.time()
@@ -211,7 +211,7 @@ if __name__ == '__main__':
                         print('learning_rate %f, total_step %d, total_loss is %.2f, inference_loss is %.2f, reg_loss is %.2f, train_accuracy is %.6f, '
                               'speed %.3f samples/sec' % (learning_rate_val, global_step_val, total_loss_val, inference_loss_val, np.sum(reg_loss_val), acc_val, pre_sec))
                     else:
-                        sess.run(train_op, feed_dict=feed_dict, options=config_pb2.RunOptions(report_tensor_allocations_upon_oom=True))
+                        sess.run([train_op, inc_global_step_op], feed_dict=feed_dict, options=config_pb2.RunOptions(report_tensor_allocations_upon_oom=True))
 
                     # save summary
                     if global_step_val % args.summary_interval == 0:
