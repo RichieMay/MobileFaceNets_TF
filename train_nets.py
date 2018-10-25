@@ -173,7 +173,7 @@ if __name__ == '__main__':
             saver.restore(sess, ckpt.model_checkpoint_path)
             ckpt_prefix_name = ckpt.model_checkpoint_path.split('.ckpt')[0]
             split_array = ckpt_prefix_name.split('_')
-            pre_train_step = int(split_array[1])
+            pre_train_step = int(split_array[2])
 
         # output file path
         if not os.path.exists(args.ckpt_path):
@@ -218,7 +218,7 @@ if __name__ == '__main__':
 
                     # save ckpt files
                     if global_step_val % args.ckpt_interval == 0:
-                        filename = 'MobileFaceNets_{:d}'.format(global_step_val) + '.ckpt'
+                        filename = 'MobileFaceNets_{}_{:d}'.format(args.loss_type, global_step_val) + '.ckpt'
                         filename = os.path.join(args.ckpt_path, filename)
                         saver.save(sess, filename)
 
