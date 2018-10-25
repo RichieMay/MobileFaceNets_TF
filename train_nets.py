@@ -189,18 +189,15 @@ if __name__ == '__main__':
         assign_global_step = tf.assign(global_step, pre_train_step, name='assignment_global_step')
         global_step_val = sess.run(assign_global_step)
 
-        while global_step_val < args.max_step:
+        while (global_step_val + 1) < args.max_step:
             sess.run(iterator.initializer)
-            while True:
+            while (global_step_val + 1) < args.max_step:
                 try:
-                    global_step_val = sess.run(inc_global_step_op)
-                    if global_step_val >= args.max_step:
-                        break
-
                     images_train, labels_train = sess.run(next_element)
+                    feed_dict = {inputs: images_train, labels: labels_train}
 
                     # print training information
-                    feed_dict = {inputs: images_train, labels: labels_train}
+                    global_step_val = global_step_val + 1
                     if global_step_val % args.show_info_interval == 0:
                         start = time.time()
 
