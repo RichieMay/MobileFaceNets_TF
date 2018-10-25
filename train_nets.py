@@ -25,15 +25,14 @@ slim = tf.contrib.slim
 
 def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
-    parser.add_argument('--max_epoch', type=int, default=12, help='epoch to train the network')
     parser.add_argument('--image_size', default=[112, 112], help='the image size')
     parser.add_argument('--loss_type', type=str, choices=['softmax', 'arcface'], default=None)
+    parser.add_argument('--max_step', type=int, default=800000, help='the max train step')
     parser.add_argument('--num_output', default=85164, help='the train images number')
     parser.add_argument('--weight_decay', default=5e-5, help='L2 weight regularization.')
-    parser.add_argument('--lr_schedule', help='Number of epochs for learning rate piecewise.', default=[4, 7, 9, 11])
+    parser.add_argument('--step_schedule', help='Number of epochs for learning rate piecewise.', default=[80000, 100000, 120000, 140000])
     parser.add_argument('--train_batch_size', type=int, default=90, help='batch size to train network')
-    parser.add_argument('--tfrecords_file_path', default='./datasets/tfrecords', type=str,
-                        help='path to the output of tfrecords file path')
+    parser.add_argument('--tfrecords_file_path', default='./datasets/tfrecords', type=str, help='path to the output of tfrecords file path')
     parser.add_argument('--summary_path', default='./output/summary', help='the summary file save path')
     parser.add_argument('--ckpt_path', default='./output/ckpt', help='the ckpt file save path')
     parser.add_argument('--log_file_path', default='./output/logs', help='the ckpt file save path')
@@ -43,17 +42,12 @@ def get_parser():
     parser.add_argument('--ckpt_interval', default=500, help='intervals to save ckpt file')
     parser.add_argument('--show_info_interval', default=100, help='intervals to show ckpt info')
     parser.add_argument('--pretrained_model', type=str, default='', help='Load a pretrained model before training starts.')
-    parser.add_argument('--optimizer', type=str, choices=['ADAGRAD', 'ADADELTA', 'ADAM', 'RMSPROP', 'MOM'],
-                        help='The optimization algorithm to use', default='ADAM')
+    parser.add_argument('--optimizer', type=str, choices=['ADAGRAD', 'ADADELTA', 'ADAM', 'RMSPROP', 'MOM'], help='The optimization algorithm to use', default='ADAM')
     parser.add_argument('--log_device_mapping', default=False, help='show device placement log')
-    parser.add_argument('--moving_average_decay', type=float,
-                        help='Exponential decay for tracking of training parameters.', default=0.999)
-    parser.add_argument('--log_histograms',
-                        help='Enables logging of weight/bias histograms in tensorboard.', action='store_true')
-    parser.add_argument('--prelogits_norm_loss_factor', type=float,
-                        help='Loss based on the norm of the activations in the prelogits layer.', default=2e-5)
-    parser.add_argument('--prelogits_norm_p', type=float,
-                        help='Norm to use for prelogits norm loss.', default=1.0)
+    parser.add_argument('--moving_average_decay', type=float, help='Exponential decay for tracking of training parameters.', default=0.999)
+    parser.add_argument('--log_histograms', help='Enables logging of weight/bias histograms in tensorboard.', action='store_true')
+    parser.add_argument('--prelogits_norm_loss_factor', type=float, help='Loss based on the norm of the activations in the prelogits layer.', default=2e-5)
+    parser.add_argument('--prelogits_norm_p', type=float, help='Norm to use for prelogits norm loss.', default=1.0)
 
     args = parser.parse_args()
     return args
@@ -71,7 +65,6 @@ if __name__ == '__main__':
             os.makedirs(log_dir)
 
         # define global parameters
-        epoch = tf.Variable(name='epoch', initial_value=-1, trainable=False)
         global_step = tf.Variable(name='global_step', initial_value=0, trainable=False)
 
         # define placeholder
@@ -129,7 +122,7 @@ if __name__ == '__main__':
         total_loss = tf.add_n([inference_loss] + regularization_losses, name='total_loss')
 
         # define the learning rate schedule
-        learning_rate = tf.train.piecewise_constant(epoch, boundaries=args.lr_schedule, values=[0.1, 0.01, 0.001, 0.0001, 0.00001], name='lr_schedule')
+        learning_rate = tf.train.piecewise_constant(global_step, boundaries=args.step_schedule, values=[0.001, 0.0005, 0.0003, 0.0001, 0.00001], name='lr_schedule')
         
         # define sess
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
@@ -155,7 +148,6 @@ if __name__ == '__main__':
         train_op = train(total_loss, global_step, args.optimizer, learning_rate, args.moving_average_decay,
                          tf.global_variables(), summaries, args.log_histograms)
         inc_global_step_op = tf.assign_add(global_step, 1, name='increment_global_step')
-        inc_epoch_op = tf.assign_add(epoch, 1, name='increment_epoch')
 
         # record trainable variable
         hd = open("./arch/txt/trainable_var.txt", "w")
@@ -174,8 +166,7 @@ if __name__ == '__main__':
         sess.run(tf.local_variables_initializer())
 
         # load pretrained model
-        count = 0
-        epoch_count = 0
+        pre_train_step = 0
         if pretrained_model:
             print('Restoring pretrained model: %s' % pretrained_model)
             ckpt = tf.train.get_checkpoint_state(pretrained_model)
@@ -184,8 +175,7 @@ if __name__ == '__main__':
             saver.restore(sess, ckpt.model_checkpoint_path)
             ckpt_prefix_name = ckpt.model_checkpoint_path.split('.ckpt')[0]
             split_array = ckpt_prefix_name.split('_')
-            count = int(split_array[2])
-            epoch_count = int(split_array[1])
+            pre_train_step = int(split_array[1])
 
         # output file path
         if not os.path.exists(args.ckpt_path):
@@ -195,48 +185,51 @@ if __name__ == '__main__':
         
         print('\nstart training...')
         total_accuracy = {}
-        for i in range(epoch_count):
-            sess.run(inc_epoch_op)
 
-        for j in range(epoch_count, args.max_epoch):
+        assign_global_step = tf.assign(global_step, pre_train_step, name='assignment_global_step')
+        global_step_val = sess.run(assign_global_step)
+
+        while global_step_val < args.max_step:
             sess.run(iterator.initializer)
-            epoch_val = sess.run(inc_epoch_op)
             while True:
                 try:
+                    global_step_val = sess.run(inc_global_step_op)
+                    if global_step_val >= args.max_step:
+                        break
+
                     images_train, labels_train = sess.run(next_element)
 
-                    count += 1
                     # print training information
                     feed_dict = {inputs: images_train, labels: labels_train}
-                    if count % args.show_info_interval == 0:
+                    if global_step_val % args.show_info_interval == 0:
                         start = time.time()
 
-                        _, learning_rate_val, total_loss_val, inference_loss_val, reg_loss_val, _, acc_val = \
-                            sess.run([train_op, learning_rate, total_loss, inference_loss, regularization_losses, inc_global_step_op, Accuracy_Op],
+                        _, learning_rate_val, total_loss_val, inference_loss_val, reg_loss_val, acc_val = \
+                            sess.run([train_op, learning_rate, total_loss, inference_loss, regularization_losses, Accuracy_Op],
                                      feed_dict=feed_dict, options=config_pb2.RunOptions(report_tensor_allocations_upon_oom=True))
 
                         end = time.time()
                         pre_sec = args.train_batch_size / (end - start)
 
-                        print('epoch %d, learning_rate %f, total_step %d, total_loss is %.2f, inference_loss is %.2f, reg_loss is %.2f, train_accuracy is %.6f, '
-                              'speed %.3f samples/sec' % (epoch_val, learning_rate_val, count, total_loss_val, inference_loss_val, np.sum(reg_loss_val), acc_val, pre_sec))
+                        print('learning_rate %f, total_step %d, total_loss is %.2f, inference_loss is %.2f, reg_loss is %.2f, train_accuracy is %.6f, '
+                              'speed %.3f samples/sec' % (learning_rate_val, global_step_val, total_loss_val, inference_loss_val, np.sum(reg_loss_val), acc_val, pre_sec))
                     else:
                         sess.run(train_op, feed_dict=feed_dict, options=config_pb2.RunOptions(report_tensor_allocations_upon_oom=True))
 
                     # save summary
-                    if count % args.summary_interval == 0:
+                    if global_step_val % args.summary_interval == 0:
                         feed_dict = {inputs: images_train, labels: labels_train}
                         summary_op_val = sess.run(summary_op, feed_dict=feed_dict)
-                        summary.add_summary(summary_op_val, count)
+                        summary.add_summary(summary_op_val, global_step_val)
 
                     # save ckpt files
-                    if count % args.ckpt_interval == 0:
-                        filename = 'MobileFaceNets_{:d}_{:d}'.format(epoch_val, count) + '.ckpt'
+                    if global_step_val % args.ckpt_interval == 0:
+                        filename = 'MobileFaceNets_{:d}'.format(global_step_val) + '.ckpt'
                         filename = os.path.join(args.ckpt_path, filename)
                         saver.save(sess, filename)
 
                 except tf.errors.OutOfRangeError:
-                    print("End of epoch %d, step %d" % (epoch_val, count))
+                    print("End of total step %d" % global_step_val)
                     break
 
         summary.close()
